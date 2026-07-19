@@ -1,52 +1,66 @@
-# Orbital Transfer Lab
+# 🛰️ Orbital Transfer Lab
 
-Interactive space visualization for orbital mechanics — Hohmann transfers, gravity-assist slingshots, the Oberth effect, and replays of historic missions — built with React 19, TypeScript, Three.js (react-three-fiber), Mantine, and zustand.
+**Interactive orbital mechanics you can actually fly** — Hohmann transfers, gravity-assist slingshots, the Oberth effect, and replays of eight real missions, rendered in 3D and driven by real Kepler physics underneath, not canned animation.
 
-## Run it
+[![Live Demo](https://badgen.net/badge/demo/live/4a90e2)](https://cuplexuser.github.io/Orbital-Transfer-Lab/)
+[![TypeScript](https://badgen.net/badge/TypeScript/React%2019%20%C2%B7%20Three.js/3178c6)]()
+[![Tests](https://badgen.net/badge/physics%20tests/52%20passing/2ea44f)]()
+
+<!-- Add a screenshot or short GIF here — this is the single highest-impact change you can make.
+     Suggested: docs/screenshot.png, then: ![Orbital Transfer Lab](docs/screenshot.png) -->
+
+**[→ Try it live](https://cuplexuser.github.io/Orbital-Transfer-Lab/)** — runs entirely in-browser, nothing to install.
+
+## What it does
+
+Pick two planets, launch a transfer, and watch the actual Δv budget, transfer time, and phase angle play out — a real two-body Kepler solve runs underneath every animation. Four modes:
+
+- **Interplanetary transfer** — planet-to-planet Hohmann transfers around the Sun, with launch-window timing (*launch now* or *wait for next window*)
+- **Earth orbit transfer** — true-scale LEO ↔ GEO burns (1 unit = 1,000 km)
+- **Gravity assist** — build a patched-conic slingshot and see the "free" Δv it steals from a planet's orbital motion
+- **Oberth effect** — why burns are cheapest deep in a gravity well, visualized around any body from the Sun to a moon
+- **Historic missions** — animated replays of Voyager 1 & 2, Galileo, Cassini–Huygens, New Horizons, MESSENGER, Juno, and Parker Solar Probe, pinned to real flyby dates with J2000 planet positions
+
+**Major moons** (Galilean moons, Titan, Enceladus, the Moon, Titania, Triton) orbit at their real periods. **Camera** drags to orbit, scrolls to zoom, and can lock onto any body as it moves.
+
+## Run it locally
 
 ```sh
 pnpm install
 pnpm dev        # dev server
-pnpm test       # physics unit tests (vitest)
+pnpm test       # 52 physics unit tests (vitest)
 pnpm build      # production build
 ```
 
-## Modes
+<details>
+<summary><b>The physics</b> — analytic two-body Kepler mechanics, pure TypeScript</summary>
 
-- **Interplanetary transfer** — planet-to-planet Hohmann transfers around the Sun. Pick departure and target planets, read Δv budgets, transfer time, synodic period, and the required departure phase angle. *Launch now* burns immediately; *Wait for next window* holds until the phase angle is right, then departs automatically and arrives at the target planet. Toggle the compressed (square-root) distance scale to fit the outer planets on screen.
-- **Earth orbit transfer** — circular orbit-to-orbit transfers around Earth (e.g. LEO → GEO). Configure both altitudes (sliders, number inputs, or LEO/MEO/GEO presets) and execute the two-burn transfer; the scene is true-scale (1 unit = 1,000 km).
-- **Gravity assist** — patched-conic slingshot builder. Choose the assist planet, hyperbolic excess speed v∞, flyby periapsis, and approach geometry; pass *behind* the planet to speed up or *ahead* to slow down. The scene shows the heliocentric orbit before (dashed) and after the flyby, and an inset diagrams the planet-frame hyperbola with its turn angle δ, where sin(δ/2) = 1/(1 + r_p·v∞²/μ). Readouts include the "free" Δv stolen from the planet's orbital motion and whether the craft escapes the solar system.
-- **Oberth effect** — why burns are cheapest deep in a gravity well, around **any central body**: the Sun, any planet, or a major moon. Set up an elliptical orbit (sliders scale with the body), pick a burn size and *where* on the orbit to fire it, and compare the energy gained (ΔE = v·Δv + Δv²/2) at that point against the same burn at periapsis and apoapsis. Shows the new orbit, the raised apoapsis (or hyperbolic v∞ on escape), and the periapsis advantage factor.
-- **Historic missions** — animated replays of eight real missions: Voyager 1, Voyager 2's grand tour, Galileo's VEEGA loop, Cassini–Huygens, New Horizons, MESSENGER's six-flyby crawl into Mercury orbit, Juno, and Parker Solar Probe's shrinking Venus-assist petals. Trajectories are stylized interpolations pinned to the real flyby dates, with planets placed from their J2000 mean longitudes so encounter geometry is roughly right. A timeline tracks each gravity assist and event as the clock passes it.
-
-**Major moons**: the Galilean moons, Titan, Enceladus, the Moon, Titania, and Triton (retrograde) orbit their planets at their real periods — on exaggerated display orbits in the solar-system views, and at true scale in Earth-orbit mode, where the Moon sits a sobering 384,400 km out.
-
-**Camera**: drag to orbit, scroll to zoom, and lock the focus onto any body — pick one in the time bar or click a planet's label; the camera then rides along as it moves. The left panel is drag-resizable and collapsible, the telemetry card can be minimized, and those layout preferences persist across sessions.
-
-Time controls (bottom bar): play/pause, reset, and per-mode speed presets.
-
-## Physics
-
-Analytic two-body Kepler mechanics in pure TypeScript under `src/physics/` (no React/Three imports):
+All in `src/physics/`, no React/Three imports:
 
 - vis-viva, circular velocities, periods, mean motions, Kepler-equation Newton solver (`kepler.ts`)
 - Hohmann Δv₁/Δv₂, transfer time, transfer-ellipse geometry, synodic period, departure phase angle, launch-window timing (`hohmann.ts`)
 - general 2D conics from state vectors via the eccentricity vector — ellipses and hyperbolae alike (`conic.ts`)
-- patched-conic gravity assists: planet-frame velocity rotation by the hyperbolic turn angle, heliocentric orbits before/after (`flyby.ts`)
+- patched-conic gravity assists: planet-frame velocity rotation by the hyperbolic turn angle (`flyby.ts`)
 - Oberth-effect energy accounting for an impulsive prograde burn anywhere on an orbit (`oberth.ts`)
-- The spacecraft moves along the transfer ellipse at physically correct non-uniform speed via a Newton solve of Kepler's equation.
+- the spacecraft moves along the transfer ellipse at physically correct non-uniform speed via a Newton solve of Kepler's equation
 
-All orbits are treated as circular and coplanar. Unit tests (52) pin the numbers to textbook values (LEO 300 km → GEO ≈ 3.89 km/s total; Earth → Mars ≈ 5.59 km/s, ≈ 259 d, 44.3° phase, ≈ 780 d synodic).
+All orbits are treated as circular and coplanar. 52 unit tests pin the numbers to textbook values (LEO 300 km → GEO ≈ 3.89 km/s total; Earth → Mars ≈ 5.59 km/s, ≈ 259 d, 44.3° phase, ≈ 780 d synodic).
 
-## Graphics
+</details>
 
-- Post-processing bloom + vignette (`@react-three/postprocessing`), toggleable in the panel
-- Real NASA-derived maps for Earth (Blue Marble) and the Moon (`public/textures/`); procedural canvas textures for everything else — banded gas giants, rocky worlds and moons, Saturn's rings with the Cassini gap — all seeded and cached
+<details>
+<summary><b>Graphics</b></summary>
+
+- Post-processing bloom + vignette (`@react-three/postprocessing`), toggleable
+- Real NASA-derived maps for Earth (Blue Marble) and the Moon; seeded procedural textures for everything else — banded gas giants, rocky worlds, Saturn's rings with the Cassini gap
 - Layered additive glow sprites for the Sun and planet halos, atmosphere shell on Earth
-- Spacecraft model with an engine glow and a fading motion trail
+- Spacecraft model with engine glow and a fading motion trail
 - Two parallax starfield layers
 
-## Architecture
+</details>
+
+<details>
+<summary><b>Architecture</b></summary>
 
 ```
 src/
@@ -57,4 +71,6 @@ src/
   ui/        Mantine control panel, telemetry readout, time bar, flyby inset diagram
 ```
 
-Rendering notes: scene coordinates stay O(1–100) (never raw km in float32 buffers); every path — transfer arcs, conics, mission trajectories — is point-sampled in physical space and mapped through the radial scale, so curves stay tangent to the orbit rings even under nonlinear compression; per-frame motion reads the clock transiently inside `useFrame` — React re-renders only on configuration changes.
+Scene coordinates stay O(1–100) — never raw km in float32 buffers. Every path (transfer arcs, conics, mission trajectories) is point-sampled in physical space and mapped through the radial scale, so curves stay tangent to orbit rings even under nonlinear compression. Per-frame motion reads the clock transiently inside `useFrame` — React re-renders only on configuration changes.
+
+</details>
