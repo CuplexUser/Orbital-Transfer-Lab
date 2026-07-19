@@ -9,22 +9,22 @@ import { ConicPath } from './ConicPath';
 import { FitCamera } from './FitCamera';
 import { MoonSystem } from './Moons';
 import { OrbitRing } from './OrbitRing';
-import { EARTH_MAP_URL, realTexture } from './realTextures';
+import { planetMapUrl, realTexture, SATURN_RING_MAP_URL } from './realTextures';
 import { ShipModel } from './Spacecraft';
 import { SunVisual } from './SunVisual';
 import { planetDisplayRadius, polarToVec3, useRadialScale } from './scale';
-import { glowTexture, planetTexture, saturnRingTexture } from './textures';
+import { glowTexture, planetTexture } from './textures';
 
 /** Planet visuals without orbital motion — the parent group sets the position. */
 function PinnedPlanet({ spec }: { spec: PlanetSpec }) {
   const displayR = planetDisplayRadius(spec.bodyRadiusKm) * 1.6;
   const meshRef = useRef<Mesh>(null);
-  const map = useMemo(
-    () => (spec.id === 'earth' ? realTexture(EARTH_MAP_URL) : planetTexture(spec.id)),
-    [spec.id],
-  );
+  const map = useMemo(() => {
+    const url = planetMapUrl(spec.id);
+    return url ? realTexture(url) : planetTexture(spec.id);
+  }, [spec.id]);
   const haloTex = useMemo(() => glowTexture(spec.color), [spec.color]);
-  const ringTex = useMemo(() => (spec.id === 'saturn' ? saturnRingTexture() : null), [spec.id]);
+  const ringTex = useMemo(() => (spec.id === 'saturn' ? realTexture(SATURN_RING_MAP_URL) : null), [spec.id]);
   useFrame((_, delta) => {
     if (meshRef.current) meshRef.current.rotation.y += delta * 0.12;
   });

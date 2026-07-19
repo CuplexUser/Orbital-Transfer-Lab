@@ -6,9 +6,9 @@ import { MU_SUN, meanMotion, type PlanetSpec } from '../physics';
 import { useStore } from '../state/store';
 import { useFocusTarget } from './focus';
 import { MoonSystem } from './Moons';
-import { EARTH_MAP_URL, realTexture } from './realTextures';
+import { planetMapUrl, realTexture, SATURN_RING_MAP_URL } from './realTextures';
 import { planetDisplayRadius, polarToVec3, type RadialScale } from './scale';
-import { glowTexture, planetTexture, saturnRingTexture } from './textures';
+import { glowTexture, planetTexture } from './textures';
 
 interface PlanetBodyProps {
   spec: PlanetSpec;
@@ -41,12 +41,12 @@ export function PlanetBody({
   const displayR = planetDisplayRadius(spec.bodyRadiusKm) * sizeBoost;
   const epoch = epochAngleOverrideRad ?? spec.epochAngleRad;
 
-  const map = useMemo(
-    () => (spec.id === 'earth' ? realTexture(EARTH_MAP_URL) : planetTexture(spec.id)),
-    [spec.id],
-  );
+  const map = useMemo(() => {
+    const url = planetMapUrl(spec.id);
+    return url ? realTexture(url) : planetTexture(spec.id);
+  }, [spec.id]);
   const haloTex = useMemo(() => glowTexture(spec.color), [spec.color]);
-  const ringTex = useMemo(() => (spec.id === 'saturn' ? saturnRingTexture() : null), [spec.id]);
+  const ringTex = useMemo(() => (spec.id === 'saturn' ? realTexture(SATURN_RING_MAP_URL) : null), [spec.id]);
 
   useFocusTarget(spec.id, ref);
 

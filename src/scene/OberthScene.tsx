@@ -8,20 +8,23 @@ import { ConicPath } from './ConicPath';
 import { EarthVisual } from './EarthVisual';
 import { FitCamera } from './FitCamera';
 import { useRadialScale } from './scale';
+import { planetMapUrl, realTexture, SATURN_RING_MAP_URL } from './realTextures';
 import { SunVisual } from './SunVisual';
-import { glowTexture, moonSurfaceTexture, planetTexture, saturnRingTexture } from './textures';
+import { glowTexture, moonSurfaceTexture, planetTexture } from './textures';
 
 /** The Oberth lab's central body, rendered close-up: Sun, planet, or moon. */
 function CentralBodyVisual({ body, radiusUnits }: { body: CentralBody; radiusUnits: number }) {
   const meshRef = useRef<Mesh>(null);
   const map = useMemo(() => {
     if (body.kind === 'star') return null;
-    return body.kind === 'planet'
-      ? planetTexture(body.id as Parameters<typeof planetTexture>[0])
-      : moonSurfaceTexture(body.id as Parameters<typeof moonSurfaceTexture>[0]);
+    if (body.kind === 'planet') {
+      const url = planetMapUrl(body.id);
+      return url ? realTexture(url) : planetTexture(body.id as Parameters<typeof planetTexture>[0]);
+    }
+    return moonSurfaceTexture(body.id as Parameters<typeof moonSurfaceTexture>[0]);
   }, [body]);
   const halo = useMemo(() => glowTexture(body.color), [body.color]);
-  const ringTex = useMemo(() => (body.id === 'saturn' ? saturnRingTexture() : null), [body.id]);
+  const ringTex = useMemo(() => (body.id === 'saturn' ? realTexture(SATURN_RING_MAP_URL) : null), [body.id]);
 
   useFrame((_, delta) => {
     if (meshRef.current) meshRef.current.rotation.y += delta * 0.05;

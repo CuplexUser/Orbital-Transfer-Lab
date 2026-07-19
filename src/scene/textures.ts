@@ -185,29 +185,6 @@ function earthTexture(): CanvasTexture {
   return tex;
 }
 
-export function saturnRingTexture(): CanvasTexture {
-  const key = 'saturnRing';
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const W = 512;
-  const { canvas, ctx } = makeCanvas(W, 16);
-  const rand = mulberry32(1610);
-  for (let x = 0; x < W; x++) {
-    const t = x / W;
-    // Cassini-division-ish gap around t ~ 0.62.
-    const gap = Math.exp(-(((t - 0.62) / 0.035) ** 2));
-    const inner = Math.min(1, t * 8); // fade-in at inner edge
-    const outer = Math.min(1, (1 - t) * 6);
-    const alpha = Math.max(0, (0.75 + 0.25 * Math.sin(t * 90) + (rand() - 0.5) * 0.25) * (1 - gap)) * inner * outer;
-    const l = 68 + Math.sin(t * 40) * 8 + (rand() - 0.5) * 10;
-    ctx.fillStyle = `hsla(43, 38%, ${l}%, ${alpha.toFixed(3)})`;
-    ctx.fillRect(x, 0, 1, 16);
-  }
-  const tex = toTexture(canvas);
-  cache.set(key, tex);
-  return tex;
-}
-
 export function planetTexture(id: PlanetId): CanvasTexture {
   switch (id) {
     case 'earth':

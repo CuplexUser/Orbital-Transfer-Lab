@@ -1,5 +1,5 @@
-import { ActionIcon, Group, Paper, Select, SegmentedControl, Text, Tooltip } from '@mantine/core';
-import { MISSIONS, missionSpeedPresetsDPerS, missionTotalDays } from '../data/missions';
+import { ActionIcon, Group, Paper, Select, Slider, Text, Tooltip } from '@mantine/core';
+import { MISSIONS, missionTotalDays } from '../data/missions';
 import { PLANETS, PLANET_LIST } from '../physics';
 import { useSimTime } from '../state/selectors';
 import { useStore, type Mode } from '../state/store';
@@ -29,30 +29,32 @@ function focusOptions(mode: Mode, missionId: string): { value: string; label: st
   ];
 }
 
-const HELIO_SPEEDS = [
-  { label: '1 d/s', value: String(86_400) },
-  { label: '5 d/s', value: String(5 * 86_400) },
-  { label: '15 d/s', value: String(15 * 86_400) },
-  { label: '60 d/s', value: String(60 * 86_400) },
-];
+const DAY = 86_400;
 
-const GEO_SPEEDS = [
-  { label: '1 min/s', value: String(60) },
-  { label: '10 min/s', value: String(600) },
-  { label: '30 min/s', value: String(1800) },
-  { label: '2 h/s', value: String(7200) },
-];
+/**
+ * Sim-seconds-per-real-second bounds for the speed slider, by mode. Missions
+ * scale with the mission's own duration — Parker's petals need slow, fine
+ * control while Voyager's decades need to be skimmable.
+ */
+function speedBoundsS(mode: Mode, missionId: string): [number, number] {
+  if (mode === 'geocentric') return [10, 4 * 3600]; // 10 s/s .. 4 h/s
+  if (mode === 'missions') {
+    const mission = MISSIONS[missionId as keyof typeof MISSIONS];
+    const totalDays = missionTotalDays(mission);
+    return [(totalDays / 2000) * DAY, (totalDays / 4) * DAY];
+  }
+  return [0.1 * DAY, 120 * DAY];
+}
 
-const fmtDPerS = (d: number) =>
-  d >= 365 ? `${Number((d / 365).toFixed(1))} yr/s` : `${d} d/s`;
+const round1 = (n: number) => Math.round(n * 10) / 10;
 
-/** Mission speeds scale with mission length: Parker's petals need d/s, Voyager needs yr/s. */
-function missionSpeeds(missionId: string): { label: string; value: string }[] {
-  const mission = MISSIONS[missionId as keyof typeof MISSIONS];
-  return missionSpeedPresetsDPerS(missionTotalDays(mission)).map((d) => ({
-    label: fmtDPerS(d),
-    value: String(d * 86_400),
-  }));
+/** Format a sim-seconds-per-real-second rate in the most legible unit. */
+function fmtSpeed(v: number): string {
+  if (v < 60) return `${round1(v)} s/s`;
+  if (v < 3600) return `${round1(v / 60)} min/s`;
+  if (v < DAY) return `${round1(v / 3600)} h/s`;
+  if (v < DAY * 365) return `${round1(v / DAY)} d/s`;
+  return `${round1(v / (DAY * 365))} yr/s`;
 }
 
 export function TimeControls() {
@@ -67,8 +69,10 @@ export function TimeControls() {
   const missionId = useStore((s) => s.missionId);
   const t = useSimTime();
 
-  const speeds =
-    mode === 'missions' ? missionSpeeds(missionId) : mode === 'geocentric' ? GEO_SPEEDS : HELIO_SPEEDS;
+  const [minS, maxS] = speedBoundsS(mode, missionId);
+  const logMin = Math.log10(minS);
+  const logMax = Math.log10(maxS);
+  const logValue = Math.min(logMax, Math.max(logMin, Math.log10(timeScale)));
 
   return (
     <Paper className="floating-panel time-bar" p="xs" radius="md" withBorder>
@@ -94,12 +98,22 @@ export function TimeControls() {
             ↺
           </ActionIcon>
         </Tooltip>
-        <SegmentedControl
-          size="xs"
-          data={speeds}
-          value={String(timeScale)}
-          onChange={(v) => setTimeScale(Number(v))}
-        />
+        <Tooltip label="Simulation speed">
+          <Slider
+            size="xs"
+            w={130}
+            min={logMin}
+            max={logMax}
+            step={(logMax - logMin) / 200}
+            value={logValue}
+            onChange={(v) => setTimeScale(10 ** v)}
+            label={(v) => fmtSpeed(10 ** v)}
+            aria-label="Simulation speed"
+          />
+        </Tooltip>
+        <Text size="xs" className="telemetry-value" style={{ minWidth: 60 }}>
+          {fmtSpeed(timeScale)}
+        </Text>
         <Tooltip label="Lock the camera onto a body">
           <Select
             size="xs"

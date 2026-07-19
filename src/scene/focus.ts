@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import { Vector3, type Object3D } from 'three';
 import { useStore } from '../state/store';
 
@@ -36,10 +36,20 @@ const diff = new Vector3();
 /**
  * Mount once per Canvas, after the scene, so its frame callback runs after
  * the bodies have moved. 'sun' (or a missing/hidden target) means the origin.
+ *
+ * Two phases: right after the focus target changes, it *seeks* — easing the
+ * controls target onto the body, overriding any pan so the camera lands on
+ * the new focus. Once converged it switches to *tracking* — each frame it
+ * nudges the controls target by only the body's own incremental motion, not
+ * its absolute position. That preserves any offset the user has since panned
+ * in, instead of yanking the view back to the body every frame.
  */
 export function FocusRig() {
   const controls = useThree((s) => s.controls) as unknown as ControlsLike | null;
   const camera = useThree((s) => s.camera);
+  const lastFocusId = useRef<string | null>(null);
+  const trackedPos = useRef(new Vector3());
+  const seeking = useRef(true);
 
   useFrame((_, delta) => {
     if (!controls) return;
@@ -50,14 +60,33 @@ export function FocusRig() {
     } else {
       desired.set(0, 0, 0);
     }
-    diff.subVectors(desired, controls.target);
-    const d2 = diff.lengthSq();
-    if (d2 < 1e-10) return;
-    // Ease toward the target; snaps to exact tracking once converged.
-    const k = d2 < 1e-4 ? 1 : Math.min(1, 6 * delta);
-    diff.multiplyScalar(k);
-    controls.target.add(diff);
-    camera.position.add(diff);
+
+    if (focusId !== lastFocusId.current) {
+      lastFocusId.current = focusId;
+      seeking.current = true;
+    }
+
+    if (seeking.current) {
+      diff.subVectors(desired, controls.target);
+      const d2 = diff.lengthSq();
+      if (d2 < 1e-6) {
+        seeking.current = false;
+        trackedPos.current.copy(desired);
+        return;
+      }
+      const k = Math.min(1, 6 * delta);
+      diff.multiplyScalar(k);
+      controls.target.add(diff);
+      camera.position.add(diff);
+      return;
+    }
+
+    diff.subVectors(desired, trackedPos.current);
+    if (diff.lengthSq() > 1e-12) {
+      controls.target.add(diff);
+      camera.position.add(diff);
+    }
+    trackedPos.current.copy(desired);
   });
 
   return null;
