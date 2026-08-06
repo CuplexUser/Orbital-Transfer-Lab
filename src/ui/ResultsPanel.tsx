@@ -1,4 +1,4 @@
-import { Badge, Card, Divider, Group, Stack, Text } from '@mantine/core';
+import { Badge, Card, Collapse, Divider, Group, Stack, Text, UnstyledButton } from '@mantine/core';
 import type { ReactNode } from 'react';
 import {
   AU_KM,
@@ -42,6 +42,23 @@ function Row({ label, value, dim = false }: { label: string; value: ReactNode; d
   );
 }
 
+/**
+ * Secondary readouts, folded away by default. The panel is pinned over the
+ * scene, so what it costs in screen is what the scene loses.
+ */
+function DetailsFold({ children }: { children: ReactNode }) {
+  const open = useStore((s) => s.telemetryDetails);
+  const setOpen = useStore((s) => s.setTelemetryDetails);
+  return (
+    <>
+      <UnstyledButton className="details-toggle" onClick={() => setOpen(!open)}>
+        {open ? '▾ Less' : '▸ More detail'}
+      </UnstyledButton>
+      <Collapse expanded={open}>{children}</Collapse>
+    </>
+  );
+}
+
 const STATUS_LABEL = {
   idle: 'Standby',
   scheduled: 'Awaiting window',
@@ -76,6 +93,7 @@ function TransferResults() {
     seconds >= 2 * SECONDS_PER_DAY ? fmtDays(seconds) : fmtHoursMinutes(seconds);
 
   let liveRows: ReactNode = null;
+  let windowRow: ReactNode = null;
   if (target && r1 !== r2) {
     const n1 = meanMotion(mu, r1);
     const n2 = meanMotion(target.mu, target.orbitRadiusKm);
@@ -93,6 +111,13 @@ function TransferResults() {
     const missAngle = normalizeAngleSigned(
       targetAngleAt(target, arrivalTimeS) - (departureAngleRad + Math.PI),
     );
+    // The one row worth permanent space: whether you can go yet.
+    windowRow =
+      status === 'idle' || status === 'scheduled' ? (
+        <Row label="Next window in" value={fmtSpan(windowIn)} />
+      ) : (
+        <Row label={`${target.name} miss angle`} value={fmtDeg(missAngle)} />
+      );
     liveRows = (
       <>
         <Divider my={4} opacity={0.4} />
@@ -107,12 +132,6 @@ function TransferResults() {
         />
         <Row label={`Required lead of ${target.name}`} value={fmtDeg(requiredPhase)} />
         <Row label={`${target.name} leads by`} value={fmtDeg(currentPhase)} dim={status !== 'idle'} />
-        {(status === 'idle' || status === 'scheduled') && (
-          <Row label="Next window in" value={fmtSpan(windowIn)} />
-        )}
-        {status !== 'idle' && (
-          <Row label={`${target.name} miss angle`} value={fmtDeg(missAngle)} />
-        )}
       </>
     );
   }
@@ -133,7 +152,7 @@ function TransferResults() {
           {STATUS_LABEL[status]}
         </Badge>
       </Group>
-      <Stack gap={4}>
+      <Stack gap={3}>
         {burns.map((burn, i) => (
           <Row
             key={burn.id}
@@ -144,34 +163,40 @@ function TransferResults() {
         <Row label="Δv total" value={fmtKmPerS(result.dvTotal)} />
         <Row label="Transfer time" value={fmtSpan(result.transferTimeS)} />
         {transitRow}
-        {liveRows}
-        {!helio && (
-          <>
-            <Divider my={4} opacity={0.4} />
-            <Row label="Start orbit radius" value={fmtKm(r1)} />
-            <Row label={toMoon ? "Moon's orbit radius" : 'Target orbit radius'} value={fmtKm(r2)} />
-            <Row label="Start period" value={fmtHoursMinutes(orbitalPeriod(mu, r1))} />
-            <Row label="Transfer eccentricity" value={result.eTransfer.toFixed(3)} />
-          </>
-        )}
-        {/* What each impulse actually does to the ship's speed */}
-        {burns.length === 2 && (
-          <>
-            <Divider my={4} opacity={0.4} />
-            <Row label="Speed before Δv₁" value={fmtKmPerS(burns[0].speedBeforeKmS)} dim />
-            <Row label="Speed after Δv₁" value={fmtKmPerS(burns[0].speedAfterKmS)} />
-            <Row label="Speed before Δv₂" value={fmtKmPerS(burns[1].speedBeforeKmS)} dim />
-            <Row label="Speed after Δv₂" value={fmtKmPerS(burns[1].speedAfterKmS)} />
-          </>
-        )}
+        {windowRow}
       </Stack>
-      {toMoon && (
-        <Text size="xs" c="dimmed" mt={8}>
-          Two-body only: the Moon's own gravity is ignored, so Δv₂ here is the burn to circularize
-          at lunar distance. A real mission instead lets the Moon capture it — lunar orbit insertion
-          costs about 0.8 km/s.
-        </Text>
-      )}
+
+      <DetailsFold>
+        <Stack gap={3}>
+          {liveRows}
+          {!helio && (
+            <>
+              <Divider my={4} opacity={0.4} />
+              <Row label="Start orbit radius" value={fmtKm(r1)} />
+              <Row label={toMoon ? "Moon's orbit radius" : 'Target orbit radius'} value={fmtKm(r2)} />
+              <Row label="Start period" value={fmtHoursMinutes(orbitalPeriod(mu, r1))} />
+              <Row label="Transfer eccentricity" value={result.eTransfer.toFixed(3)} />
+            </>
+          )}
+          {/* What each impulse actually does to the ship's speed */}
+          {burns.length === 2 && (
+            <>
+              <Divider my={4} opacity={0.4} />
+              <Row label="Speed before Δv₁" value={fmtKmPerS(burns[0].speedBeforeKmS)} dim />
+              <Row label="Speed after Δv₁" value={fmtKmPerS(burns[0].speedAfterKmS)} />
+              <Row label="Speed before Δv₂" value={fmtKmPerS(burns[1].speedBeforeKmS)} dim />
+              <Row label="Speed after Δv₂" value={fmtKmPerS(burns[1].speedAfterKmS)} />
+            </>
+          )}
+          {toMoon && (
+            <Text size="xs" c="dimmed" mt={6}>
+              Two-body only: the Moon's own gravity is ignored, so Δv₂ here is the burn to
+              circularize at lunar distance. A real mission instead lets the Moon capture it —
+              lunar orbit insertion costs about 0.8 km/s.
+            </Text>
+          )}
+        </Stack>
+      </DetailsFold>
     </Card>
   );
 }
@@ -199,25 +224,30 @@ function SlingshotResults() {
           {result.escapesAfter ? 'Solar escape!' : gained ? 'Energy gained' : 'Energy lost'}
         </Badge>
       </Group>
-      <Stack gap={4}>
-        <Row label="Planet orbital speed" value={fmtKmPerS(result.vPlanetKmS)} />
-        <Row label="v∞ (planet frame)" value={fmtKmPerS(Math.hypot(result.vInfInVec.x, result.vInfInVec.y))} />
-        <Row label="Turn angle" value={fmtDeg(result.turnAngleRad)} />
-        <Divider my={4} opacity={0.4} />
+      <Stack gap={3}>
         <Row label="Sun-frame speed in" value={fmtKmPerS(result.speedInKmS)} />
         <Row label="Sun-frame speed out" value={fmtKmPerS(result.speedOutKmS)} />
         <Row
           label="Speed change — free"
           value={`${result.deltaSpeedKmS >= 0 ? '+' : ''}${result.deltaSpeedKmS.toFixed(3)} km/s`}
         />
-        <Row label="Equivalent engine Δv" value={fmtKmPerS(result.equivalentDvKmS)} />
-        <Divider my={4} opacity={0.4} />
-        <Row label="Orbit before" value={describeOrbit(result.preOrbit)} />
-        <Row label="Orbit after" value={describeOrbit(result.postOrbit)} />
       </Stack>
-      <Text size="xs" c="dimmed" mt={8}>
-        The "free" Δv is momentum borrowed from the planet — Jupiter slows down by about 10⁻²³ km/s.
-      </Text>
+      <DetailsFold>
+        <Stack gap={3}>
+          <Divider my={4} opacity={0.4} />
+          <Row label="Planet orbital speed" value={fmtKmPerS(result.vPlanetKmS)} />
+          <Row label="v∞ (planet frame)" value={fmtKmPerS(Math.hypot(result.vInfInVec.x, result.vInfInVec.y))} />
+          <Row label="Turn angle" value={fmtDeg(result.turnAngleRad)} />
+          <Row label="Equivalent engine Δv" value={fmtKmPerS(result.equivalentDvKmS)} />
+          <Divider my={4} opacity={0.4} />
+          <Row label="Orbit before" value={describeOrbit(result.preOrbit)} />
+          <Row label="Orbit after" value={describeOrbit(result.postOrbit)} />
+          <Text size="xs" c="dimmed" mt={6}>
+            The "free" Δv is momentum borrowed from the planet — Jupiter slows down by about
+            10⁻²³ km/s.
+          </Text>
+        </Stack>
+      </DetailsFold>
     </Card>
   );
 }
@@ -236,26 +266,29 @@ function OberthResults() {
           {result.escapes ? `Escapes ${body.name}!` : 'Bound orbit'}
         </Badge>
       </Group>
-      <Stack gap={4}>
+      <Stack gap={3}>
         <Row label="Speed at burn point" value={fmtKmPerS(result.burnSpeedKmS)} />
-        <Row label="Escape speed there" value={fmtKmPerS(result.escapeSpeedAtBurnKmS)} />
-        <Row label="Burn radius" value={fmtKm(result.burnRadiusKm)} />
-        <Divider my={4} opacity={0.4} />
         <Row label="Energy bought here" value={`${result.energyGainKm2S2.toFixed(2)} km²/s²`} />
-        <Row label="… at periapsis" value={`${result.energyGainAtPeriapsis.toFixed(2)} km²/s²`} dim />
-        <Row label="… at apoapsis" value={`${result.energyGainAtApoapsis.toFixed(2)} km²/s²`} dim />
-        <Row label="Periapsis advantage" value={`${(result.energyGainAtPeriapsis / result.energyGainAtApoapsis).toFixed(1)}×`} />
         <Row label="This burn vs apoapsis" value={`${multiplier.toFixed(1)}×`} />
-        <Divider my={4} opacity={0.4} />
         {result.escapes ? (
           <Row label="Hyperbolic excess v∞" value={fmtKmPerS(result.vInfinityKmS!)} />
         ) : (
           <Row label="New apoapsis altitude" value={fmtKm(result.newApoapsisKm! - body.radiusKm)} />
         )}
       </Stack>
-      <Text size="xs" c="dimmed" mt={8}>
-        Same propellant, same engine — the payoff depends entirely on where you light it.
-      </Text>
+      <DetailsFold>
+        <Stack gap={3}>
+          <Divider my={4} opacity={0.4} />
+          <Row label="Escape speed there" value={fmtKmPerS(result.escapeSpeedAtBurnKmS)} />
+          <Row label="Burn radius" value={fmtKm(result.burnRadiusKm)} />
+          <Row label="… at periapsis" value={`${result.energyGainAtPeriapsis.toFixed(2)} km²/s²`} dim />
+          <Row label="… at apoapsis" value={`${result.energyGainAtApoapsis.toFixed(2)} km²/s²`} dim />
+          <Row label="Periapsis advantage" value={`${(result.energyGainAtPeriapsis / result.energyGainAtApoapsis).toFixed(1)}×`} />
+          <Text size="xs" c="dimmed" mt={6}>
+            Same propellant, same engine — the payoff depends entirely on where you light it.
+          </Text>
+        </Stack>
+      </DetailsFold>
     </Card>
   );
 }

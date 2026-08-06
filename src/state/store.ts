@@ -162,6 +162,8 @@ export interface AppState {
   navbarWidth: number;
   navbarCollapsed: boolean;
   telemetryCollapsed: boolean;
+  /** Show the secondary telemetry rows (radii, speeds, phasing) */
+  telemetryDetails: boolean;
 
   setMode(mode: Mode): void;
   setDeparturePlanet(id: PlanetId): void;
@@ -183,6 +185,7 @@ export interface AppState {
   setNavbarWidth(px: number): void;
   setNavbarCollapsed(collapsed: boolean): void;
   setTelemetryCollapsed(collapsed: boolean): void;
+  setTelemetryDetails(show: boolean): void;
   resetSim(): void;
   resetTransfer(): void;
   launchNow(): void;
@@ -203,6 +206,16 @@ export function oberthDefaults(id: CentralBodyId) {
     obDvKmS: Math.max(0.001, round3(0.076 * vCirc)),
     obBurnNuDeg: 0,
   };
+}
+
+/**
+ * Earth-orbit transfers are the one case where the ship is the whole show —
+ * it is a speck against a true-scale Earth, and following it is what makes the
+ * ellipse legible. Elsewhere the transfer reads better from the system view.
+ * Only ever takes over the default focus, never a focus the user chose.
+ */
+function followShipOnLaunch(s: AppState): string {
+  return s.mode === 'geocentric' && s.focusId === 'sun' ? 'ship' : s.focusId;
 }
 
 export const useStore = create<AppState>()(persist((set, get) => ({
@@ -236,9 +249,10 @@ export const useStore = create<AppState>()(persist((set, get) => ({
 
   focusId: 'sun',
 
-  navbarWidth: 340,
+  navbarWidth: 300,
   navbarCollapsed: false,
   telemetryCollapsed: false,
+  telemetryDetails: false,
 
   setMode: (mode) =>
     set({
@@ -274,8 +288,14 @@ export const useStore = create<AppState>()(persist((set, get) => ({
   setNavbarWidth: (navbarWidth) => set({ navbarWidth }),
   setNavbarCollapsed: (navbarCollapsed) => set({ navbarCollapsed }),
   setTelemetryCollapsed: (telemetryCollapsed) => set({ telemetryCollapsed }),
+  setTelemetryDetails: (telemetryDetails) => set({ telemetryDetails }),
   resetSim: () => set({ simTimeS: 0, playing: false, transfer: IDLE_TRANSFER }),
-  resetTransfer: () => set({ transfer: IDLE_TRANSFER }),
+  resetTransfer: () =>
+    set((s) => ({
+      transfer: IDLE_TRANSFER,
+      // Hand the camera back only if we were the ones who took it.
+      focusId: s.mode === 'geocentric' && s.focusId === 'ship' ? 'sun' : s.focusId,
+    })),
 
   launchNow: () => {
     const s = get();
@@ -283,6 +303,7 @@ export const useStore = create<AppState>()(persist((set, get) => ({
     if (r1 === r2) return;
     set({
       playing: true,
+      focusId: followShipOnLaunch(s),
       transfer: {
         status: 'inTransit',
         departureTimeS: s.simTimeS,
@@ -311,6 +332,7 @@ export const useStore = create<AppState>()(persist((set, get) => ({
     const departureTimeS = s.simTimeS + wait;
     set({
       playing: true,
+      focusId: followShipOnLaunch(s),
       transfer: {
         status: wait < 1 ? 'inTransit' : 'scheduled',
         departureTimeS,
@@ -341,6 +363,7 @@ export const useStore = create<AppState>()(persist((set, get) => ({
     navbarWidth: s.navbarWidth,
     navbarCollapsed: s.navbarCollapsed,
     telemetryCollapsed: s.telemetryCollapsed,
+    telemetryDetails: s.telemetryDetails,
     effectsEnabled: s.effectsEnabled,
     bodySizeMode: s.bodySizeMode,
   }),

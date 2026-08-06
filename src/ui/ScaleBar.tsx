@@ -70,11 +70,11 @@ export function ScaleBar() {
   const exaggeration = helio ? bodyExaggeration(PLANETS.earth.bodyRadiusKm, sizeMode, scaleFn) : 1;
 
   const distanceNote =
-    mode === 'geocentric'
-      ? 'distances true'
-      : helio && compressed
+    mode === 'oberth'
+      ? 'body-normalized'
+      : compressed
         ? 'distances √-compressed'
-        : 'distances linear';
+        : 'distances true';
   const bodyNote =
     exaggeration < 1.05
       ? 'bodies true size'

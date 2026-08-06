@@ -9,6 +9,7 @@ import { MoonSystem } from './Moons';
 import { planetMapUrl, realTexture, SATURN_RING_MAP_URL } from './realTextures';
 import { polarToVec3, useBodyRadius, type RadialScale } from './scale';
 import { glowTexture, planetTexture } from './textures';
+import { readViewport } from './viewport';
 
 interface PlanetBodyProps {
   spec: PlanetSpec;
@@ -24,6 +25,9 @@ interface PlanetBodyProps {
 
 const SPIN_RAD_PER_S = 0.12;
 
+/** Minimum on-screen orbit radius, in pixels, for a non-highlighted label to show. */
+const LABEL_MIN_ORBIT_PX = 46;
+
 export function PlanetBody({
   spec,
   scaleFn,
@@ -34,6 +38,7 @@ export function PlanetBody({
 }: PlanetBodyProps) {
   const ref = useRef<Group>(null);
   const meshRef = useRef<Mesh>(null);
+  const labelRef = useRef<HTMLSpanElement>(null);
   const setFocus = useStore((s) => s.setFocus);
   const focused = useStore((s) => s.focusId === spec.id);
   const bodyRadius = useBodyRadius();
@@ -60,6 +65,16 @@ export function PlanetBody({
     const [x, y, z] = polarToVec3(rUnits, epoch + n * t);
     ref.current.position.set(x, y, z);
     if (meshRef.current) meshRef.current.rotation.y += delta * SPIN_RAD_PER_S;
+
+    // Zoomed out far enough and the inner planets pile onto the Sun; fade any
+    // label whose orbit is too small on screen to sit clear of its neighbours.
+    const label = labelRef.current;
+    if (label) {
+      const { unitsPerPixel } = readViewport();
+      const orbitPx = unitsPerPixel > 0 ? rUnits / unitsPerPixel : Infinity;
+      const crowded = orbitPx < LABEL_MIN_ORBIT_PX && !emphasized && !focused;
+      label.style.opacity = crowded ? '0' : focused ? '1' : emphasized ? '0.95' : '0.45';
+    }
   });
 
   return (
@@ -92,8 +107,8 @@ export function PlanetBody({
         zIndexRange={[10, 0]}
       >
         <span
+          ref={labelRef}
           className={focused ? 'scene-label body-label focused' : 'scene-label body-label'}
-          style={{ opacity: focused ? 1 : emphasized ? 0.95 : 0.45 }}
           title={focused ? 'Unfocus camera' : 'Focus camera here'}
           onClick={() => setFocus(focused ? 'sun' : spec.id)}
         >

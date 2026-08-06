@@ -52,12 +52,28 @@ body,
 
 .results-slot {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 300px;
-  max-height: calc(100dvh - 110px);
+  top: 12px;
+  right: 12px;
+  width: 252px;
+  max-height: calc(100dvh - 100px);
   overflow-y: auto;
   z-index: 30; /* above drei <Html> scene labels */
+}
+
+.details-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 2px 0;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(143, 163, 200, 0.8);
+}
+
+.details-toggle:hover {
+  color: #ffc069;
 }
 
 .time-slot {
@@ -100,6 +116,9 @@ body,
 .body-label {
   pointer-events: auto;
   cursor: pointer;
+  /* Opacity is driven per-frame from the camera; ease it so labels fade
+     rather than blink as the view crosses the crowding threshold. */
+  transition: opacity 0.18s ease-out;
 }
 
 .body-label:hover {
@@ -111,19 +130,23 @@ body,
 }
 
 .moon-label {
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.12em;
-  opacity: 0.7;
+  opacity: 0.75;
 }
 
 .scene-label {
   font-family: 'Cascadia Code', Consolas, monospace;
-  font-size: 10px;
-  letter-spacing: 0.18em;
+  font-size: 12px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(205, 220, 245, 0.9);
-  text-shadow: 0 0 8px rgba(0, 0, 0, 0.9);
+  color: rgba(214, 227, 248, 0.95);
+  /* Doubled up: scene labels sit over starfields and bright planet limbs alike */
+  text-shadow:
+    0 0 4px rgba(4, 5, 12, 1),
+    0 0 10px rgba(4, 5, 12, 0.9);
   white-space: nowrap;
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -143,7 +166,7 @@ body,
 
 .event-label em {
   font-style: normal;
-  font-size: 8px;
+  font-size: 10px;
   opacity: 0.7;
   letter-spacing: 0.08em;
 }
@@ -200,15 +223,15 @@ body,
   flex-direction: column;
   align-items: center;
   gap: 1px;
-  letter-spacing: 0.08em;
-  font-size: 9px;
+  letter-spacing: 0.06em;
+  font-size: 12px;
   /* Δv and km/s are case-sensitive notation — .scene-label uppercases by default */
   text-transform: none;
 }
 
 .burn-label em {
   font-style: normal;
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   opacity: 0.8;

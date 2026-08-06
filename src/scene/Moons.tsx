@@ -99,16 +99,19 @@ export function MoonSystem({
  */
 export function RealScaleMoon({
   scaleFn,
+  bodyScaleFn = scaleFn,
   emphasized = false,
 }: {
   scaleFn: RadialScale;
+  /** Uncompressed law, so the Moon keeps its size when distances are squeezed */
+  bodyScaleFn?: RadialScale;
   emphasized?: boolean;
 }) {
   const spec = MOONS.moon;
   const ref = useRef<Group>(null);
   const n = meanMotion(MU_EARTH, spec.orbitRadiusKm);
   const orbitR = scaleFn(spec.orbitRadiusKm);
-  const size = scaleFn(spec.bodyRadiusKm); // true scale, ~1.7 units
+  const size = bodyScaleFn(spec.bodyRadiusKm); // true scale, ~1.7 units
   const ring = useMemo(() => circlePoints(orbitR, 160), [orbitR]);
   const map = useMemo(() => realTexture(MOON_MAP_URL), []);
   useFocusTarget('moon', ref);

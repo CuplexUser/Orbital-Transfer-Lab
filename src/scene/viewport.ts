@@ -16,6 +16,11 @@ export interface ViewportSample {
  */
 const sample: ViewportSample = { unitsPerPixel: 0, targetRadiusUnits: 0 };
 
+/** Current sample, for per-frame readers that must not trigger a re-render. */
+export function readViewport(): ViewportSample {
+  return sample;
+}
+
 interface ControlsLike {
   target: Vector3;
 }
