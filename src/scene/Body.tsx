@@ -7,7 +7,7 @@ import { useStore } from '../state/store';
 import { useFocusTarget } from './focus';
 import { MoonSystem } from './Moons';
 import { planetMapUrl, realTexture, SATURN_RING_MAP_URL } from './realTextures';
-import { planetDisplayRadius, polarToVec3, type RadialScale } from './scale';
+import { polarToVec3, useBodyRadius, type RadialScale } from './scale';
 import { glowTexture, planetTexture } from './textures';
 
 interface PlanetBodyProps {
@@ -36,10 +36,14 @@ export function PlanetBody({
   const meshRef = useRef<Mesh>(null);
   const setFocus = useStore((s) => s.setFocus);
   const focused = useStore((s) => s.focusId === spec.id);
+  const bodyRadius = useBodyRadius();
   const n = meanMotion(MU_SUN, spec.orbitRadiusKm);
   const rUnits = scaleFn(spec.orbitRadiusKm);
-  const displayR = planetDisplayRadius(spec.bodyRadiusKm) * sizeBoost;
+  const displayR = bodyRadius(spec.bodyRadiusKm) * sizeBoost;
   const epoch = epochAngleOverrideRad ?? spec.epochAngleRad;
+  // True/proportional scales shrink bodies to specks — the halo keeps them
+  // findable and clickable without inflating the body itself.
+  const haloR = Math.max(displayR * 4.4, 0.7);
 
   const map = useMemo(() => {
     const url = planetMapUrl(spec.id);
@@ -65,7 +69,7 @@ export function PlanetBody({
         <meshStandardMaterial map={map} roughness={0.9} metalness={0} />
       </mesh>
       {/* Soft halo so bodies read against black; brighter when involved in the transfer */}
-      <sprite scale={[displayR * 4.4, displayR * 4.4, 1]}>
+      <sprite scale={[haloR, haloR, 1]}>
         <spriteMaterial
           map={haloTex}
           transparent

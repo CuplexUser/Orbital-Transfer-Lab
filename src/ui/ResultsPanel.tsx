@@ -2,11 +2,8 @@ import { Badge, Card, Divider, Group, Stack, Text } from '@mantine/core';
 import type { ReactNode } from 'react';
 import {
   AU_KM,
-  MU_SUN,
-  PLANETS,
   SECONDS_PER_DAY,
   apoapsisRadius,
-  circularVelocity,
   departurePhaseAngle,
   meanMotion,
   normalizeAngleSigned,
@@ -19,14 +16,17 @@ import {
 import { MISSIONS, missionDateAt, missionShipAt } from '../data/missions';
 import {
   useFlybyResult,
+  useHohmannBurns,
   useHohmannResult,
   useMissionPath,
   useOberthBody,
   useOberthResult,
+  useRendezvousTarget,
   useSimTime,
+  useTransferConfig,
   useTransferInputs,
 } from '../state/selectors';
-import { useStore } from '../state/store';
+import { departureBodyAngleAt, targetAngleAt, useStore } from '../state/store';
 import { fmtDays, fmtDeg, fmtHoursMinutes, fmtKm, fmtKmPerS } from './fmt';
 
 function Row({ label, value, dim = false }: { label: string; value: ReactNode; dim?: boolean }) {
@@ -60,35 +60,58 @@ function TransferResults() {
   const mode = useStore((s) => s.mode);
   const status = useStore((s) => s.transfer.status);
   const departureTimeS = useStore((s) => s.transfer.departureTimeS);
-  const departurePlanet = useStore((s) => s.departurePlanet);
-  const targetPlanet = useStore((s) => s.targetPlanet);
+  const departureAngleRad = useStore((s) => s.transfer.departureAngleRad);
+  const geoTarget = useStore((s) => s.geoTarget);
+  const config = useTransferConfig();
   const { mu, r1, r2 } = useTransferInputs();
   const result = useHohmannResult();
+  const burns = useHohmannBurns();
+  const target = useRendezvousTarget();
   const t = useSimTime();
 
   const helio = mode === 'heliocentric';
+  const toMoon = mode === 'geocentric' && geoTarget === 'moon';
+  /** Multi-day spans read as days; orbital ones as hours and minutes. */
+  const fmtSpan = (seconds: number) =>
+    seconds >= 2 * SECONDS_PER_DAY ? fmtDays(seconds) : fmtHoursMinutes(seconds);
 
   let liveRows: ReactNode = null;
-  if (helio && r1 !== r2) {
-    const dep = PLANETS[departurePlanet];
-    const tgt = PLANETS[targetPlanet];
-    const n1 = meanMotion(MU_SUN, r1);
-    const n2 = meanMotion(MU_SUN, r2);
+  if (target && r1 !== r2) {
+    const n1 = meanMotion(mu, r1);
+    const n2 = meanMotion(target.mu, target.orbitRadiusKm);
     const currentPhase = normalizeAngleSigned(
-      tgt.epochAngleRad + n2 * t - (dep.epochAngleRad + n1 * t),
+      targetAngleAt(target, t) - departureBodyAngleAt(config, t),
     );
     const requiredPhase = departurePhaseAngle(mu, r1, r2);
     const windowIn =
       status === 'scheduled'
         ? Math.max(0, departureTimeS - t)
         : timeToNextWindow(currentPhase, requiredPhase, n1, n2);
+    // How far off the rendezvous is: where the target will be at arrival vs
+    // where the ship will actually come out of the transfer.
+    const arrivalTimeS = departureTimeS + result.transferTimeS;
+    const missAngle = normalizeAngleSigned(
+      targetAngleAt(target, arrivalTimeS) - (departureAngleRad + Math.PI),
+    );
     liveRows = (
       <>
-        <Row label="Synodic period" value={fmtDays(synodicPeriod(orbitalPeriod(mu, r1), orbitalPeriod(mu, r2)))} />
-        <Row label="Required phase" value={fmtDeg(requiredPhase)} />
-        <Row label="Current phase" value={fmtDeg(currentPhase)} dim={status !== 'idle'} />
+        <Divider my={4} opacity={0.4} />
+        <Row
+          label="Window recurs every"
+          value={fmtSpan(
+            synodicPeriod(
+              orbitalPeriod(mu, r1),
+              orbitalPeriod(target.mu, target.orbitRadiusKm),
+            ),
+          )}
+        />
+        <Row label={`Required lead of ${target.name}`} value={fmtDeg(requiredPhase)} />
+        <Row label={`${target.name} leads by`} value={fmtDeg(currentPhase)} dim={status !== 'idle'} />
         {(status === 'idle' || status === 'scheduled') && (
-          <Row label="Next window in" value={fmtDays(windowIn)} />
+          <Row label="Next window in" value={fmtSpan(windowIn)} />
+        )}
+        {status !== 'idle' && (
+          <Row label={`${target.name} miss angle`} value={fmtDeg(missAngle)} />
         )}
       </>
     );
@@ -97,12 +120,7 @@ function TransferResults() {
   let transitRow: ReactNode = null;
   if (status === 'inTransit') {
     const remaining = Math.max(0, departureTimeS + result.transferTimeS - t);
-    transitRow = (
-      <Row
-        label="Arrival in"
-        value={helio ? fmtDays(remaining) : fmtHoursMinutes(remaining)}
-      />
-    );
+    transitRow = <Row label="Arrival in" value={fmtSpan(remaining)} />;
   }
 
   return (
@@ -116,27 +134,44 @@ function TransferResults() {
         </Badge>
       </Group>
       <Stack gap={4}>
-        <Row label="Δv₁ · departure burn" value={fmtKmPerS(result.dv1)} />
-        <Row label="Δv₂ · arrival burn" value={fmtKmPerS(result.dv2)} />
+        {burns.map((burn, i) => (
+          <Row
+            key={burn.id}
+            label={`Δv${i === 0 ? '₁' : '₂'} · ${burn.id === 'depart' ? 'departure' : 'arrival'} ${burn.dvKmS >= 0 ? '▲' : '▼'}`}
+            value={`${fmtKmPerS(Math.abs(burn.dvKmS))} ${burn.dvKmS >= 0 ? 'prograde' : 'retro'}`}
+          />
+        ))}
         <Row label="Δv total" value={fmtKmPerS(result.dvTotal)} />
-        <Row
-          label="Transfer time"
-          value={helio ? fmtDays(result.transferTimeS) : fmtHoursMinutes(result.transferTimeS)}
-        />
-        {liveRows}
+        <Row label="Transfer time" value={fmtSpan(result.transferTimeS)} />
         {transitRow}
+        {liveRows}
         {!helio && (
           <>
             <Divider my={4} opacity={0.4} />
             <Row label="Start orbit radius" value={fmtKm(r1)} />
-            <Row label="Target orbit radius" value={fmtKm(r2)} />
-            <Row label="Start orbit speed" value={fmtKmPerS(circularVelocity(mu, r1))} />
-            <Row label="Target orbit speed" value={fmtKmPerS(circularVelocity(mu, r2))} />
+            <Row label={toMoon ? "Moon's orbit radius" : 'Target orbit radius'} value={fmtKm(r2)} />
             <Row label="Start period" value={fmtHoursMinutes(orbitalPeriod(mu, r1))} />
-            <Row label="Target period" value={fmtHoursMinutes(orbitalPeriod(mu, r2))} />
+            <Row label="Transfer eccentricity" value={result.eTransfer.toFixed(3)} />
+          </>
+        )}
+        {/* What each impulse actually does to the ship's speed */}
+        {burns.length === 2 && (
+          <>
+            <Divider my={4} opacity={0.4} />
+            <Row label="Speed before Δv₁" value={fmtKmPerS(burns[0].speedBeforeKmS)} dim />
+            <Row label="Speed after Δv₁" value={fmtKmPerS(burns[0].speedAfterKmS)} />
+            <Row label="Speed before Δv₂" value={fmtKmPerS(burns[1].speedBeforeKmS)} dim />
+            <Row label="Speed after Δv₂" value={fmtKmPerS(burns[1].speedAfterKmS)} />
           </>
         )}
       </Stack>
+      {toMoon && (
+        <Text size="xs" c="dimmed" mt={8}>
+          Two-body only: the Moon's own gravity is ignored, so Δv₂ here is the burn to circularize
+          at lunar distance. A real mission instead lets the Moon capture it — lunar orbit insertion
+          costs about 0.8 km/s.
+        </Text>
+      )}
     </Card>
   );
 }

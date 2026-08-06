@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { PLANETS } from './bodies';
+import { MOONS, PLANETS } from './bodies';
 import { EARTH_RADIUS_KM, GEO_ALTITUDE_KM, MU_EARTH, MU_SUN, SECONDS_PER_DAY } from './constants';
 import {
   departurePhaseAngle,
+  hohmannBurns,
   hohmannTransfer,
   synodicPeriod,
   timeToNextWindow,
@@ -71,6 +72,57 @@ describe('hohmannTransfer: symmetry and edge cases', () => {
 
   it('synodicPeriod of identical periods is Infinity', () => {
     expect(synodicPeriod(5000, 5000)).toBe(Infinity);
+  });
+});
+
+describe('hohmannTransfer: LEO 300 km -> lunar distance (TLI)', () => {
+  const r1 = EARTH_RADIUS_KM + 300;
+  const r2 = MOONS.moon.orbitRadiusKm;
+  const t = hohmannTransfer(MU_EARTH, r1, r2);
+
+  it('translunar injection burn ~3.11 km/s', () => expect(t.dv1).toBeCloseTo(3.11, 2));
+  it('coasts ~5 days out', () => {
+    expect(t.transferTimeS / SECONDS_PER_DAY).toBeCloseTo(4.98, 1);
+  });
+  it('the Moon must lead by ~114 deg at departure', () => {
+    const phase = departurePhaseAngle(MU_EARTH, r1, r2) / DEG;
+    expect(Math.abs(phase - 114.4)).toBeLessThan(1);
+  });
+  it('the transfer ellipse is highly eccentric', () => {
+    expect(t.eTransfer).toBeCloseTo(0.966, 3);
+  });
+});
+
+describe('hohmannBurns', () => {
+  it('outward: both burns prograde, magnitudes match hohmannTransfer', () => {
+    const r1 = EARTH_RADIUS_KM + 300;
+    const r2 = EARTH_RADIUS_KM + GEO_ALTITUDE_KM;
+    const t = hohmannTransfer(MU_EARTH, r1, r2);
+    const [depart, arrive] = hohmannBurns(MU_EARTH, r1, r2);
+    expect(depart.dvKmS).toBeGreaterThan(0);
+    expect(arrive.dvKmS).toBeGreaterThan(0);
+    expect(depart.dvKmS).toBeCloseTo(t.dv1, 10);
+    expect(arrive.dvKmS).toBeCloseTo(t.dv2, 10);
+  });
+
+  it('inward: both burns retrograde', () => {
+    const [depart, arrive] = hohmannBurns(MU_EARTH, 42_164, 6678);
+    expect(depart.dvKmS).toBeLessThan(0);
+    expect(arrive.dvKmS).toBeLessThan(0);
+  });
+
+  it('burns sit at the transfer endpoints and chain speed-wise', () => {
+    const [depart, arrive] = hohmannBurns(MU_EARTH, 6678, 42_164);
+    expect(depart.radiusKm).toBe(6678);
+    expect(depart.phiRad).toBe(0);
+    expect(arrive.radiusKm).toBe(42_164);
+    expect(arrive.phiRad).toBeCloseTo(Math.PI, 12);
+    expect(depart.speedBeforeKmS + depart.dvKmS).toBeCloseTo(depart.speedAfterKmS, 10);
+    expect(arrive.speedBeforeKmS + arrive.dvKmS).toBeCloseTo(arrive.speedAfterKmS, 10);
+  });
+
+  it('r1 === r2 yields no burns', () => {
+    expect(hohmannBurns(MU_EARTH, 10_000, 10_000)).toEqual([]);
   });
 });
 

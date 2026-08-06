@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import {
   EARTH_RADIUS_KM,
   GEO_ALTITUDE_KM,
+  MOONS,
   MU_EARTH,
   MU_SUN,
   PLANETS,
@@ -20,6 +21,16 @@ import { MISSIONS, missionDefaultTimescaleS, type MissionId } from '../data/miss
 
 export type Mode = 'heliocentric' | 'geocentric' | 'slingshot' | 'oberth' | 'missions';
 export type TransferStatus = 'idle' | 'scheduled' | 'inTransit' | 'arrived';
+/** Earth-orbit mode destination: a chosen circular orbit, or a rendezvous with the Moon. */
+export type GeoTarget = 'orbit' | 'moon';
+
+/**
+ * How body radii are drawn against the distance scale.
+ * - `readable`   — heavily exaggerated so Mercury stays visible next to Jupiter
+ * - `proportional` — one common multiplier, so size *ratios* are true
+ * - `true`       — the same scale as the distances (planets become specks)
+ */
+export type BodySizeMode = 'readable' | 'proportional' | 'true';
 
 export interface TransferInfo {
   status: TransferStatus;
@@ -51,34 +62,57 @@ export interface TransferInputs {
   r2: number;
 }
 
-export function transferInputs(
-  mode: Mode,
-  departurePlanet: PlanetId,
-  targetPlanet: PlanetId,
-  r1AltitudeKm: number,
-  r2AltitudeKm: number,
-): TransferInputs {
-  if (mode === 'heliocentric') {
-    return {
-      mu: MU_SUN,
-      r1: PLANETS[departurePlanet].orbitRadiusKm,
-      r2: PLANETS[targetPlanet].orbitRadiusKm,
-    };
-  }
-  return { mu: MU_EARTH, r1: EARTH_RADIUS_KM + r1AltitudeKm, r2: EARTH_RADIUS_KM + r2AltitudeKm };
-}
-
-type ConfigSlice = Pick<
+export type TransferConfig = Pick<
   AppState,
-  'mode' | 'departurePlanet' | 'targetPlanet' | 'r1AltitudeKm' | 'r2AltitudeKm'
+  'mode' | 'departurePlanet' | 'targetPlanet' | 'r1AltitudeKm' | 'r2AltitudeKm' | 'geoTarget'
 >;
 
-export function inputsFromState(s: ConfigSlice): TransferInputs {
-  return transferInputs(s.mode, s.departurePlanet, s.targetPlanet, s.r1AltitudeKm, s.r2AltitudeKm);
+export function transferInputs(c: TransferConfig): TransferInputs {
+  if (c.mode === 'heliocentric') {
+    return {
+      mu: MU_SUN,
+      r1: PLANETS[c.departurePlanet].orbitRadiusKm,
+      r2: PLANETS[c.targetPlanet].orbitRadiusKm,
+    };
+  }
+  const r2 =
+    c.geoTarget === 'moon' ? MOONS.moon.orbitRadiusKm : EARTH_RADIUS_KM + c.r2AltitudeKm;
+  return { mu: MU_EARTH, r1: EARTH_RADIUS_KM + c.r1AltitudeKm, r2 };
+}
+
+export const inputsFromState = transferInputs;
+
+/**
+ * The body the ship has to *meet* at arrival, when there is one. An empty
+ * circular orbit is always there, so any departure time works; a planet or the
+ * Moon has to be in the right place, which is what launch windows are for.
+ */
+export interface RendezvousTarget {
+  name: string;
+  mu: number;
+  orbitRadiusKm: number;
+  epochAngleRad: number;
+}
+
+export function rendezvousTarget(c: TransferConfig): RendezvousTarget | null {
+  if (c.mode === 'heliocentric') {
+    const p = PLANETS[c.targetPlanet];
+    return { name: p.name, mu: MU_SUN, orbitRadiusKm: p.orbitRadiusKm, epochAngleRad: p.epochAngleRad };
+  }
+  if (c.mode === 'geocentric' && c.geoTarget === 'moon') {
+    const m = MOONS.moon;
+    return { name: m.name, mu: MU_EARTH, orbitRadiusKm: m.orbitRadiusKm, epochAngleRad: m.epochAngleRad };
+  }
+  return null;
+}
+
+/** Angle of the rendezvous target at a given sim time (same law the scene animates it with). */
+export function targetAngleAt(t: RendezvousTarget, timeS: number): number {
+  return t.epochAngleRad + meanMotion(t.mu, t.orbitRadiusKm) * timeS;
 }
 
 /** Angle of the ship's host (departure planet, or the ship's own circular orbit) at a given sim time. */
-export function departureBodyAngleAt(s: ConfigSlice, timeS: number): number {
+export function departureBodyAngleAt(s: TransferConfig, timeS: number): number {
   const { mu, r1 } = inputsFromState(s);
   const epoch = s.mode === 'heliocentric' ? PLANETS[s.departurePlanet].epochAngleRad : 0;
   return epoch + meanMotion(mu, r1) * timeS;
@@ -89,8 +123,12 @@ export interface AppState {
   departurePlanet: PlanetId;
   targetPlanet: PlanetId;
   compressedScale: boolean;
+  /** How planets and moons are sized against the distance scale (persisted) */
+  bodySizeMode: BodySizeMode;
   r1AltitudeKm: number;
   r2AltitudeKm: number;
+  /** Earth-orbit mode: circular target orbit, or a rendezvous with the Moon */
+  geoTarget: GeoTarget;
   simTimeS: number;
   playing: boolean;
   /** Sim seconds per real second */
@@ -129,8 +167,10 @@ export interface AppState {
   setDeparturePlanet(id: PlanetId): void;
   setTargetPlanet(id: PlanetId): void;
   setCompressedScale(on: boolean): void;
+  setBodySizeMode(mode: BodySizeMode): void;
   setR1Altitude(km: number): void;
   setR2Altitude(km: number): void;
+  setGeoTarget(target: GeoTarget): void;
   setPlaying(playing: boolean): void;
   setTimeScale(scale: number): void;
   setEffectsEnabled(on: boolean): void;
@@ -170,8 +210,10 @@ export const useStore = create<AppState>()(persist((set, get) => ({
   departurePlanet: 'earth',
   targetPlanet: 'mars',
   compressedScale: false,
+  bodySizeMode: 'readable',
   r1AltitudeKm: 300,
   r2AltitudeKm: GEO_ALTITUDE_KM,
+  geoTarget: 'orbit',
   simTimeS: 0,
   playing: true,
   timeScale: HELIO_DEFAULT_TIMESCALE,
@@ -210,8 +252,10 @@ export const useStore = create<AppState>()(persist((set, get) => ({
   setDeparturePlanet: (id) => set({ departurePlanet: id, transfer: IDLE_TRANSFER }),
   setTargetPlanet: (id) => set({ targetPlanet: id, transfer: IDLE_TRANSFER }),
   setCompressedScale: (on) => set({ compressedScale: on }),
+  setBodySizeMode: (bodySizeMode) => set({ bodySizeMode }),
   setR1Altitude: (km) => set({ r1AltitudeKm: km, transfer: IDLE_TRANSFER }),
   setR2Altitude: (km) => set({ r2AltitudeKm: km, transfer: IDLE_TRANSFER }),
+  setGeoTarget: (geoTarget) => set({ geoTarget, transfer: IDLE_TRANSFER }),
   setPlaying: (playing) => set({ playing }),
   setTimeScale: (timeScale) => set({ timeScale }),
   setEffectsEnabled: (effectsEnabled) => set({ effectsEnabled }),
@@ -249,13 +293,14 @@ export const useStore = create<AppState>()(persist((set, get) => ({
 
   scheduleNextWindow: () => {
     const s = get();
-    if (s.mode !== 'heliocentric') return;
+    const target = rendezvousTarget(s);
+    if (!target) return;
     const { mu, r1, r2 } = inputsFromState(s);
     if (r1 === r2) return;
     const n1 = meanMotion(mu, r1);
     const n2 = meanMotion(mu, r2);
     const theta1 = departureBodyAngleAt(s, s.simTimeS);
-    const theta2 = PLANETS[s.targetPlanet].epochAngleRad + n2 * s.simTimeS;
+    const theta2 = targetAngleAt(target, s.simTimeS);
     const wait = timeToNextWindow(
       normalizeAngleSigned(theta2 - theta1),
       departurePhaseAngle(mu, r1, r2),
@@ -297,5 +342,6 @@ export const useStore = create<AppState>()(persist((set, get) => ({
     navbarCollapsed: s.navbarCollapsed,
     telemetryCollapsed: s.telemetryCollapsed,
     effectsEnabled: s.effectsEnabled,
+    bodySizeMode: s.bodySizeMode,
   }),
 }));

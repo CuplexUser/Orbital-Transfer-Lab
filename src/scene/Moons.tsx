@@ -62,6 +62,9 @@ function MoonDot({
  * invisibly small at solar-system scale), animated at their real periods —
  * Io laps Callisto just like the real thing. Labels appear when the camera
  * is focused on the parent planet.
+ *
+ * These orbits are a readability device, so they are hidden outside the
+ * `readable` body-size mode rather than quietly contradicting an honest scale.
  */
 export function MoonSystem({
   planetId,
@@ -72,7 +75,8 @@ export function MoonSystem({
 }) {
   const moons = moonsOf(planetId);
   const focused = useStore((s) => s.focusId === planetId);
-  if (moons.length === 0) return null;
+  const readable = useStore((s) => s.bodySizeMode === 'readable');
+  if (moons.length === 0 || !readable) return null;
   return (
     <group>
       {moons.map((m, i) => (
@@ -89,9 +93,17 @@ export function MoonSystem({
 
 /**
  * The Moon at true scale for Earth-orbit mode (1 unit = 1,000 km): a quiet
- * reminder of how far away it really is compared to GEO.
+ * reminder of how far away it really is compared to GEO — and the rendezvous
+ * target itself when a translunar injection is being planned, which is what
+ * `emphasized` brightens.
  */
-export function RealScaleMoon({ scaleFn }: { scaleFn: RadialScale }) {
+export function RealScaleMoon({
+  scaleFn,
+  emphasized = false,
+}: {
+  scaleFn: RadialScale;
+  emphasized?: boolean;
+}) {
   const spec = MOONS.moon;
   const ref = useRef<Group>(null);
   const n = meanMotion(MU_EARTH, spec.orbitRadiusKm);
@@ -110,14 +122,25 @@ export function RealScaleMoon({ scaleFn }: { scaleFn: RadialScale }) {
 
   return (
     <group>
-      <Line points={ring} color="#8fa3c8" lineWidth={0.8} transparent opacity={0.2} />
+      <Line
+        points={ring}
+        color={emphasized ? '#ffb454' : '#8fa3c8'}
+        lineWidth={emphasized ? 1.5 : 0.8}
+        transparent
+        opacity={emphasized ? 0.6 : 0.2}
+      />
       <group ref={ref}>
         <mesh>
           <sphereGeometry args={[size, 32, 32]} />
-          <meshStandardMaterial map={map} roughness={0.95} />
+          <meshStandardMaterial
+            map={map}
+            roughness={0.95}
+            emissive="#8fa3c8"
+            emissiveIntensity={emphasized ? 0.25 : 0}
+          />
         </mesh>
         <Html position={[0, size + 1.4, 0]} center style={{ pointerEvents: 'none' }} zIndexRange={[10, 0]}>
-          <span className="scene-label" style={{ opacity: 0.6 }}>
+          <span className="scene-label" style={{ opacity: emphasized ? 1 : 0.6 }}>
             Moon · 384,400 km
           </span>
         </Html>

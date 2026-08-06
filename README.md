@@ -16,10 +16,14 @@
 Pick two planets, launch a transfer, and watch the actual Δv budget, transfer time, and phase angle play out — a real two-body Kepler solve runs underneath every animation. Four modes:
 
 - **Interplanetary transfer** — planet-to-planet Hohmann transfers around the Sun, with launch-window timing (*launch now* or *wait for next window*)
-- **Earth orbit transfer** — true-scale LEO ↔ GEO burns (1 unit = 1,000 km)
+- **Earth orbit transfer** — true-scale burns across the whole regime, ISS → GPS → GEO → graveyard orbit, plus a **translunar injection** out to the Moon at 384,400 km with its own launch windows and miss angle (1 unit = 1,000 km)
 - **Gravity assist** — build a patched-conic slingshot and see the "free" Δv it steals from a planet's orbital motion
 - **Oberth effect** — why burns are cheapest deep in a gravity well, visualized around any body from the Sun to a moon
 - **Historic missions** — animated replays of Voyager 1 & 2, Galileo, Cassini–Huygens, New Horizons, MESSENGER, Juno, and Parker Solar Probe, pinned to real flyby dates with J2000 planet positions
+
+**Burn vectors** are drawn where the engine actually lights, pointing prograde or retrograde with arrow length proportional to Δv, and change colour as each impulse goes from upcoming to spent.
+
+**Honest about scale.** A live ruler in the corner reads the distance the camera is actually looking at, derived by inverting the active radial scale — so it stays correct under the square-root compression that brings Neptune on screen. Planets have to be drawn far larger than life to be visible at all, so the size exaggeration is stated outright (`bodies ×1,193`) and can be switched to **Proportional** (one multiplier, so Jupiter really is 11× Earth) or **True** (bodies on the distance scale, where they nearly vanish — which is the point).
 
 **Major moons** (Galilean moons, Titan, Enceladus, the Moon, Titania, Triton) orbit at their real periods. **Camera** drags to orbit, scrolls to zoom, and can lock onto any body as it moves.
 
@@ -28,7 +32,7 @@ Pick two planets, launch a transfer, and watch the actual Δv budget, transfer t
 ```sh
 pnpm install
 pnpm dev        # dev server
-pnpm test       # 52 physics unit tests (vitest)
+pnpm test       # 61 physics unit tests (vitest)
 pnpm build      # production build
 ```
 
@@ -38,13 +42,15 @@ pnpm build      # production build
 All in `src/physics/`, no React/Three imports:
 
 - vis-viva, circular velocities, periods, mean motions, Kepler-equation Newton solver (`kepler.ts`)
-- Hohmann Δv₁/Δv₂, transfer time, transfer-ellipse geometry, synodic period, departure phase angle, launch-window timing (`hohmann.ts`)
+- Hohmann Δv₁/Δv₂, signed prograde/retrograde burn descriptors, transfer time, transfer-ellipse geometry, synodic period, departure phase angle, launch-window timing (`hohmann.ts`)
 - general 2D conics from state vectors via the eccentricity vector — ellipses and hyperbolae alike (`conic.ts`)
 - patched-conic gravity assists: planet-frame velocity rotation by the hyperbolic turn angle (`flyby.ts`)
 - Oberth-effect energy accounting for an impulsive prograde burn anywhere on an orbit (`oberth.ts`)
 - the spacecraft moves along the transfer ellipse at physically correct non-uniform speed via a Newton solve of Kepler's equation
 
-All orbits are treated as circular and coplanar. 52 unit tests pin the numbers to textbook values (LEO 300 km → GEO ≈ 3.89 km/s total; Earth → Mars ≈ 5.59 km/s, ≈ 259 d, 44.3° phase, ≈ 780 d synodic).
+All orbits are treated as circular and coplanar. 61 unit tests pin the numbers to textbook values (LEO 300 km → GEO ≈ 3.89 km/s total; LEO → lunar distance ≈ 3.11 km/s TLI, ≈ 5 d coast, Moon leading by ≈ 114°; Earth → Mars ≈ 5.59 km/s, ≈ 259 d, 44.3° phase, ≈ 780 d synodic).
+
+The lunar transfer stays two-body on purpose — the Moon's own gravity is not patched in, so Δv₂ is the burn to circularize *at* lunar distance rather than a real lunar-orbit insertion. The telemetry panel says so.
 
 </details>
 

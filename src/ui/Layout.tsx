@@ -15,12 +15,13 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { useCallback, useRef } from 'react';
 import { SpaceCanvas } from '../scene/SpaceCanvas';
-import { useStore, type Mode } from '../state/store';
+import { useStore, type BodySizeMode, type Mode } from '../state/store';
 import { GeocentricControls } from './GeocentricControls';
 import { HeliocentricControls } from './HeliocentricControls';
 import { MissionControls } from './MissionControls';
 import { OberthControls } from './OberthControls';
 import { ResultsPanel } from './ResultsPanel';
+import { ScaleBar } from './ScaleBar';
 import { SlingshotControls } from './SlingshotControls';
 import { TimeControls } from './TimeControls';
 
@@ -42,6 +43,18 @@ const MODE_CONTROLS: Record<Mode, () => React.ReactElement> = {
 
 /** Modes where the sim clock matters and the time bar should show. */
 const TIMED_MODES: Mode[] = ['heliocentric', 'geocentric', 'missions'];
+
+const BODY_SIZE_DATA: { label: string; value: BodySizeMode }[] = [
+  { label: 'Readable', value: 'readable' },
+  { label: 'Proportional', value: 'proportional' },
+  { label: 'True', value: 'true' },
+];
+
+const BODY_SIZE_HINT: Record<BodySizeMode, string> = {
+  readable: 'Bodies enlarged and range-compressed so Mercury stays visible next to Jupiter.',
+  proportional: 'One multiplier for every body — Jupiter really is 11× Earth.',
+  true: 'Bodies drawn on the distance scale. They nearly vanish: that is the real ratio.',
+};
 
 const NAVBAR_MIN = 280;
 const NAVBAR_MAX = 480;
@@ -89,6 +102,8 @@ export function Layout() {
   const setMode = useStore((s) => s.setMode);
   const effectsEnabled = useStore((s) => s.effectsEnabled);
   const setEffectsEnabled = useStore((s) => s.setEffectsEnabled);
+  const bodySizeMode = useStore((s) => s.bodySizeMode);
+  const setBodySizeMode = useStore((s) => s.setBodySizeMode);
   const navbarWidth = useStore((s) => s.navbarWidth);
   const navbarCollapsed = useStore((s) => s.navbarCollapsed);
   const setNavbarCollapsed = useStore((s) => s.setNavbarCollapsed);
@@ -144,6 +159,20 @@ export function Layout() {
         </AppShell.Section>
         <AppShell.Section>
           <Divider my="sm" opacity={0.4} />
+          <Text size="xs" c="dimmed" mb={4}>
+            Body sizes
+          </Text>
+          <SegmentedControl
+            fullWidth
+            size="xs"
+            value={bodySizeMode}
+            onChange={(v) => setBodySizeMode(v as BodySizeMode)}
+            data={BODY_SIZE_DATA}
+            mb={4}
+          />
+          <Text size="xs" c="dimmed" mb="sm">
+            {BODY_SIZE_HINT[bodySizeMode]}
+          </Text>
           <Switch
             label="Bloom & glow effects"
             size="xs"
@@ -161,6 +190,7 @@ export function Layout() {
 
       <AppShell.Main className="main-stage">
         <SpaceCanvas />
+        <ScaleBar />
         <Burger
           className="mobile-burger"
           opened={opened}

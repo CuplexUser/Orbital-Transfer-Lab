@@ -12,12 +12,12 @@ import { OrbitRing } from './OrbitRing';
 import { planetMapUrl, realTexture, SATURN_RING_MAP_URL } from './realTextures';
 import { ShipModel } from './Spacecraft';
 import { SunVisual } from './SunVisual';
-import { planetDisplayRadius, polarToVec3, useRadialScale } from './scale';
+import { polarToVec3, useBodyRadius, useRadialScale } from './scale';
 import { glowTexture, planetTexture } from './textures';
 
 /** Planet visuals without orbital motion — the parent group sets the position. */
 function PinnedPlanet({ spec }: { spec: PlanetSpec }) {
-  const displayR = planetDisplayRadius(spec.bodyRadiusKm) * 1.6;
+  const displayR = useBodyRadius()(spec.bodyRadiusKm) * 1.6;
   const meshRef = useRef<Mesh>(null);
   const map = useMemo(() => {
     const url = planetMapUrl(spec.id);
@@ -34,7 +34,7 @@ function PinnedPlanet({ spec }: { spec: PlanetSpec }) {
         <sphereGeometry args={[displayR, 48, 48]} />
         <meshStandardMaterial map={map} roughness={0.9} />
       </mesh>
-      <sprite scale={[displayR * 4.4, displayR * 4.4, 1]}>
+      <sprite scale={[Math.max(displayR * 4.4, 0.7), Math.max(displayR * 4.4, 0.7), 1]}>
         <spriteMaterial map={haloTex} transparent depthWrite={false} blending={AdditiveBlending} opacity={0.35} />
       </sprite>
       {ringTex && (

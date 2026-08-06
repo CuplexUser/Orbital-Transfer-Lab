@@ -49,6 +49,50 @@ export function hohmannTransfer(mu: number, r1: number, r2: number): HohmannResu
   };
 }
 
+export interface BurnSpec {
+  id: 'depart' | 'arrive';
+  /** Along-track Δv: positive is prograde, negative retrograde. km/s */
+  dvKmS: number;
+  /** Orbit radius where the engine lights, km */
+  radiusKm: number;
+  /** In-plane angle from the departure point, rad — 0 for departure, PI for arrival */
+  phiRad: number;
+  speedBeforeKmS: number;
+  speedAfterKmS: number;
+}
+
+/**
+ * The two impulses of a Hohmann transfer, as signed along-track burns.
+ * Both are prograde going outward (r2 > r1) and both retrograde coming back in;
+ * `hohmannTransfer` reports the same magnitudes unsigned.
+ */
+export function hohmannBurns(mu: number, r1: number, r2: number): BurnSpec[] {
+  if (r1 === r2) return [];
+  const a = (r1 + r2) / 2;
+  const vCirc1 = circularVelocity(mu, r1);
+  const vTransfer1 = visViva(mu, r1, a);
+  const vTransfer2 = visViva(mu, r2, a);
+  const vCirc2 = circularVelocity(mu, r2);
+  return [
+    {
+      id: 'depart',
+      dvKmS: vTransfer1 - vCirc1,
+      radiusKm: r1,
+      phiRad: 0,
+      speedBeforeKmS: vCirc1,
+      speedAfterKmS: vTransfer1,
+    },
+    {
+      id: 'arrive',
+      dvKmS: vCirc2 - vTransfer2,
+      radiusKm: r2,
+      phiRad: Math.PI,
+      speedBeforeKmS: vTransfer2,
+      speedAfterKmS: vCirc2,
+    },
+  ];
+}
+
 /** Synodic period of two circular orbits with periods T1, T2 (s). Infinity if equal. */
 export function synodicPeriod(period1S: number, period2S: number): number {
   if (Math.abs(period1S - period2S) < 1e-9 * Math.max(period1S, period2S)) return Infinity;

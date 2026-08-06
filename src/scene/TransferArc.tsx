@@ -7,6 +7,7 @@ import type { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { radiusAtTrueAnomaly } from '../physics';
 import { useHohmannResult } from '../state/selectors';
 import { departureBodyAngleAt, useStore } from '../state/store';
+import { BurnMarkers } from './BurnMarkers';
 import { polarToVec3, useRadialScale } from './scale';
 
 const SEGMENTS = 128;
@@ -16,9 +17,10 @@ const SEGMENTS = 128;
  * physical space and mapped through the radial scale (never a geometric
  * EllipseCurve, which would detach from the rings under compressed scale).
  * The whole group is rotated to the departure angle each frame, so the
- * geometry itself never needs recomputing while time runs.
+ * geometry itself never needs recomputing while time runs — and the burn
+ * markers mounted inside inherit that rotation for free.
  */
-export function TransferArc() {
+export function TransferArc({ showBurns = true }: { showBurns?: boolean } = {}) {
   const result = useHohmannResult();
   const scaleFn = useRadialScale();
   const status = useStore((s) => s.transfer.status);
@@ -71,6 +73,7 @@ export function TransferArc() {
         dashSize={span * 0.045}
         gapSize={span * 0.03}
       />
+      {showBurns && <BurnMarkers />}
     </group>
   );
 }

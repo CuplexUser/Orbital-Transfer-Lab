@@ -6,26 +6,66 @@ import {
   PLANETS,
   flyby,
   getCentralBody,
+  hohmannBurns,
   hohmannTransfer,
   oberthBurn,
+  type BurnSpec,
   type CentralBody,
   type FlybyResult,
   type HohmannResult,
   type OberthResult,
 } from '../physics';
-import { transferInputs, useStore, type TransferInputs } from './store';
+import {
+  rendezvousTarget,
+  transferInputs,
+  useStore,
+  type RendezvousTarget,
+  type TransferConfig,
+  type TransferInputs,
+} from './store';
+
+/** The configuration slice both `transferInputs` and `rendezvousTarget` read. */
+export function useTransferConfig(): TransferConfig {
+  const [mode, departurePlanet, targetPlanet, r1AltitudeKm, r2AltitudeKm, geoTarget] = useStore(
+    useShallow(
+      (s) =>
+        [
+          s.mode,
+          s.departurePlanet,
+          s.targetPlanet,
+          s.r1AltitudeKm,
+          s.r2AltitudeKm,
+          s.geoTarget,
+        ] as const,
+    ),
+  );
+  return useMemo(
+    () => ({ mode, departurePlanet, targetPlanet, r1AltitudeKm, r2AltitudeKm, geoTarget }),
+    [mode, departurePlanet, targetPlanet, r1AltitudeKm, r2AltitudeKm, geoTarget],
+  );
+}
 
 export function useTransferInputs(): TransferInputs {
-  const [mode, dp, tp, a1, a2] = useStore(
-    useShallow((s) => [s.mode, s.departurePlanet, s.targetPlanet, s.r1AltitudeKm, s.r2AltitudeKm] as const),
-  );
-  return useMemo(() => transferInputs(mode, dp, tp, a1, a2), [mode, dp, tp, a1, a2]);
+  const config = useTransferConfig();
+  return useMemo(() => transferInputs(config), [config]);
+}
+
+/** The body waiting at the far end, if arrival needs a launch window at all. */
+export function useRendezvousTarget(): RendezvousTarget | null {
+  const config = useTransferConfig();
+  return useMemo(() => rendezvousTarget(config), [config]);
 }
 
 /** The single source of truth for transfer numbers — readouts and geometry both use this. */
 export function useHohmannResult(): HohmannResult {
   const { mu, r1, r2 } = useTransferInputs();
   return useMemo(() => hohmannTransfer(mu, r1, r2), [mu, r1, r2]);
+}
+
+/** Signed departure/arrival impulses — shared by the scene arrows and the readout. */
+export function useHohmannBurns(): BurnSpec[] {
+  const { mu, r1, r2 } = useTransferInputs();
+  return useMemo(() => hohmannBurns(mu, r1, r2), [mu, r1, r2]);
 }
 
 /** Flyby result for the gravity-assist lab — scene, inset, and readouts all share it. */
